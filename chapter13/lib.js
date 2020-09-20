@@ -2,7 +2,7 @@ function getOptionalAttribute(item, attr, type) {
   return (item[attr] !== undefined) ? item[attr][type] : undefined;
 }
 
-exports.mapImage = function(item) {
+exports.mapImage = function (item) {
   return {
     "id": item.id.S,
     "version": parseInt(item.version.N, 10),

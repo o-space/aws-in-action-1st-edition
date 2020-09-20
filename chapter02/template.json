@@ -1,18 +1,11 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "AWS in Action: chapter 12 (Load Balancer)",
+  "Description": "AWS in Action: chapter 2",
   "Parameters": {
     "KeyName": {
       "Description": "Key Pair name",
       "Type": "AWS::EC2::KeyPair::KeyName",
       "Default": "mykey"
-    },
-    "NumberOfServers": {
-      "Description": "Number of servers",
-      "Type": "Number",
-      "Default": "2",
-      "MinValue": "2",
-      "MaxValue": "4"
     }
   },
   "Mappings": {
@@ -70,7 +63,7 @@
         }
       }
     },
-    "Subnet": {
+    "SubnetA": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "AvailabilityZone": {
@@ -87,6 +80,23 @@
         }
       }
     },
+    "SubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "172.31.37.0/24",
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
     "RouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -95,11 +105,22 @@
         }
       }
     },
-    "RouteTableAssociation": {
+    "RouteTableAssociationA": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "SubnetId": {
-          "Ref": "Subnet"
+          "Ref": "SubnetA"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      }
+    },
+    "RouteTableAssociationB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SubnetB"
         },
         "RouteTableId": {
           "Ref": "RouteTable"
@@ -127,11 +148,22 @@
         }
       }
     },
-    "SubnetNetworkAclAssociation": {
+    "SubnetNetworkAclAssociationA": {
       "Type": "AWS::EC2::SubnetNetworkAclAssociation",
       "Properties": {
         "SubnetId": {
-          "Ref": "Subnet"
+          "Ref": "SubnetA"
+        },
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        }
+      }
+    },
+    "SubnetNetworkAclAssociationB": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SubnetB"
         },
         "NetworkAclId": {
           "Ref": "NetworkAcl"
@@ -164,10 +196,46 @@
         "CidrBlock": "0.0.0.0/0"
       }
     },
+    "LoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "Subnets": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          }
+        ],
+        "LoadBalancerName": "awsinaction-elb",
+        "Listeners": [
+          {
+            "InstancePort": "80",
+            "InstanceProtocol": "HTTP",
+            "LoadBalancerPort": "80",
+            "Protocol": "HTTP"
+          }
+        ],
+        "HealthCheck": {
+          "HealthyThreshold": "2",
+          "Interval": "5",
+          "Target": "TCP:80",
+          "Timeout": "3",
+          "UnhealthyThreshold": "2"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "LoadBalancerSecurityGroup"
+          }
+        ],
+        "Scheme": "internet-facing"
+      },
+      "DependsOn": "VPCGatewayAttachment"
+    },
     "LoadBalancerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupDescription": "elb-sg",
+        "GroupDescription": "awsinaction-elb-sg",
         "VpcId": {
           "Ref": "VPC"
         },
@@ -180,39 +248,6 @@
           }
         ]
       }
-    },
-    "LoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
-      "Properties": {
-        "Subnets": [
-          {
-            "Ref": "Subnet"
-          }
-        ],
-        "LoadBalancerName": "elb",
-        "Listeners": [
-          {
-            "InstancePort": "80",
-            "InstanceProtocol": "HTTP",
-            "LoadBalancerPort": "80",
-            "Protocol": "HTTP"
-          }
-        ],
-        "HealthCheck": {
-          "HealthyThreshold": "3",
-          "Interval": "10",
-          "Target": "HTTP:80/index.html",
-          "Timeout": "5",
-          "UnhealthyThreshold": "2"
-        },
-        "SecurityGroups": [
-          {
-            "Ref": "LoadBalancerSecurityGroup"
-          }
-        ],
-        "Scheme": "internet-facing"
-      },
-      "DependsOn": "VPCGatewayAttachment"
     },
     "WebServerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
@@ -239,6 +274,65 @@
         ]
       }
     },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "awsinaction-db-sg",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "3306",
+            "ToPort": "3306",
+            "SourceSecurityGroupId": {
+              "Ref": "WebServerSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "Database": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AllocatedStorage": "5",
+        "BackupRetentionPeriod": "0",
+        "DBInstanceClass": "db.t2.micro",
+        "DBInstanceIdentifier": "awsinaction-db",
+        "DBName": "wordpress",
+        "Engine": "MySQL",
+        "MasterUsername": "wordpress",
+        "MasterUserPassword": "wordpress",
+        "VPCSecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "DatabaseSecurityGroup",
+              "GroupId"
+            ]
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        }
+      },
+      "DependsOn": "VPCGatewayAttachment"
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "DB subnet group",
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          }
+        ]
+      }
+    },
     "LaunchConfiguration": {
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Metadata": {
@@ -246,8 +340,14 @@
           "config": {
             "packages": {
               "yum": {
+                "php": [],
+                "php-mysql": [],
+                "mysql": [],
                 "httpd": []
               }
+            },
+            "sources": {
+              "/var/www/html": "https://wordpress.org/wordpress-4.2.4.tar.gz"
             },
             "files": {
               "/tmp/config": {
@@ -256,8 +356,19 @@
                     "",
                     [
                       "#!/bin/bash -ex\n",
-                      "PRIVATE_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`\n",
-                      "echo \"<html><head><title>$PRIVATE_IP</title></head><body><h1>$PRIVATE_IP</h1></body></html>\" > index.html\n"
+                      "cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php\n",
+                      "sed -i \"s/'database_name_here'/'wordpress'/g\" wp-config.php\n",
+                      "sed -i \"s/'username_here'/'wordpress'/g\" wp-config.php\n",
+                      "sed -i \"s/'password_here'/'wordpress'/g\" wp-config.php\n",
+                      "sed -i \"s/'localhost'/'",
+                      {
+                        "Fn::GetAtt": [
+                          "Database",
+                          "Endpoint.Address"
+                        ]
+                      },
+                      "'/g\" wp-config.php\n",
+                      "chmod -R 777 wp-content/ \n"
                     ]
                   ]
                 },
@@ -269,7 +380,7 @@
             "commands": {
               "01_config": {
                 "command": "/tmp/config",
-                "cwd": "/var/www/html"
+                "cwd": "/var/www/html/wordpress"
               }
             },
             "services": {
@@ -346,18 +457,15 @@
         "LaunchConfigurationName": {
           "Ref": "LaunchConfiguration"
         },
-        "MinSize": {
-          "Ref": "NumberOfServers"
-        },
-        "MaxSize": {
-          "Ref": "NumberOfServers"
-        },
-        "DesiredCapacity": {
-          "Ref": "NumberOfServers"
-        },
+        "MinSize": "2",
+        "MaxSize": "2",
+        "DesiredCapacity": "2",
         "VPCZoneIdentifier": [
           {
-            "Ref": "Subnet"
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
           }
         ]
       },
@@ -381,11 +489,12 @@
                 "LoadBalancer",
                 "DNSName"
               ]
-            }
+            },
+            "/wordpress"
           ]
         ]
       },
-      "Description": "Load Balancer URL"
+      "Description": "Wordpress URL"
     }
   }
 }

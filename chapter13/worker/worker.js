@@ -25,7 +25,7 @@ function getImage(id, cb) {
       }
     },
     "TableName": "imagery-image"
-  }, function(err, data) {
+  }, function (err, data) {
     if (err) {
       cb(err);
     } else {
@@ -38,14 +38,14 @@ function getImage(id, cb) {
   });
 }
 
-app.get('/', function(request, response) {
+app.get('/', function (request, response) {
   response.json({});
 });
 
-app.post('/sqs', function(request, response) {
+app.post('/sqs', function (request, response) {
   assert.string(request.body.imageId, "imageId");
   assert.string(request.body.desiredState, "desiredState");
-  getImage(request.body.imageId, function(err, image) {
+  getImage(request.body.imageId, function (err, image) {
     if (err) {
       throw err;
     } else {
@@ -69,11 +69,11 @@ function processImage(image, cb) {
   s3.getObject({
     "Bucket": process.env.ImageBucket,
     "Key": image.rawS3Key
-  }, function(err, data) {
+  }, function (err, data) {
     if (err) {
       cb(err);
     } else {
-      fs.writeFile(rawFile, data.Body, {"encoding": null}, function(err) {
+      fs.writeFile(rawFile, data.Body, {"encoding": null}, function (err) {
         if (err) {
           cb(err);
         } else {
@@ -82,10 +82,10 @@ function processImage(image, cb) {
             this.contrast(30);
             this.sepia(60);
             this.saturation(-30);
-            this.render(function() {
+            this.render(function () {
               this.save(processedFile);
-              fs.unlink(rawFile, function() {
-                fs.readFile(processedFile, {"encoding": null}, function(err, buf) {
+              fs.unlink(rawFile, function () {
+                fs.readFile(processedFile, {"encoding": null}, function (err, buf) {
                   if (err) {
                     cb(err);
                   } else {
@@ -95,12 +95,12 @@ function processImage(image, cb) {
                       "ACL": "public-read",
                       "Body": buf,
                       "ContentType": "image/png"
-                    }, function(err) {
+                    }, function (err) {
                       console.log("s3.putObject", err); // TODO debug only
                       if (err) {
                         cb(err);
                       } else {
-                        fs.unlink(processedFile, function() {
+                        fs.unlink(processedFile, function () {
                           cb(null, processedS3Key);
                         });
                       }
@@ -117,7 +117,7 @@ function processImage(image, cb) {
 }
 
 function processed(image, request, response) {
-  processImage(image, function(err, processedS3Key) {
+  processImage(image, function (err, processedS3Key) {
     if (err) {
       throw err;
     } else {
@@ -154,7 +154,7 @@ function processed(image, request, response) {
         },
         "ReturnValues": "ALL_NEW",
         "TableName": "imagery-image"
-      }, function(err, data) {
+      }, function (err, data) {
         if (err) {
           throw err;
         } else {
@@ -165,6 +165,6 @@ function processed(image, request, response) {
   });
 }
 
-app.listen(process.env.PORT || 8080, function() {
+app.listen(process.env.PORT || 8080, function () {
   console.log("Worker started on port " + (process.env.PORT || 8080));
 });

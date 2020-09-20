@@ -28,7 +28,7 @@ function getImage(id, cb) {
       }
     },
     "TableName": "imagery-image"
-  }, function(err, data) {
+  }, function (err, data) {
     if (err) {
       cb(err);
     } else {
@@ -48,7 +48,7 @@ function uploadImage(image, part, response) {
     "Key": rawS3Key,
     "Body": part,
     "ContentLength": part.byteCount
-  }, function(err, data) {
+  }, function (err, data) {
     if (err) {
       throw err;
     } else {
@@ -85,14 +85,14 @@ function uploadImage(image, part, response) {
         },
         "ReturnValues": "ALL_NEW",
         "TableName": "imagery-image"
-      }, function(err, data) {
+      }, function (err, data) {
         if (err) {
-           throw err;
+          throw err;
         } else {
           sqs.sendMessage({
             "MessageBody": JSON.stringify({"imageId": image.id, "desiredState": "processed"}),
             "QueueUrl": process.env.ImageQueue,
-          }, function(err) {
+          }, function (err) {
             if (err) {
               throw err;
             } else {
@@ -107,7 +107,7 @@ function uploadImage(image, part, response) {
   });
 }
 
-app.post('/image', function(request, response) {
+app.post('/image', function (request, response) {
   var id = uuid.v4();
   db.putItem({
     "Item": {
@@ -126,7 +126,7 @@ app.post('/image', function(request, response) {
     },
     "TableName": "imagery-image",
     "ConditionExpression": "attribute_not_exists(id)"
-  }, function(err, data) {
+  }, function (err, data) {
     if (err) {
       throw err;
     } else {
@@ -135,8 +135,8 @@ app.post('/image', function(request, response) {
   });
 });
 
-app.get('/image/:id', function(request, response) {
-  getImage(request.params.id, function(err, image) {
+app.get('/image/:id', function (request, response) {
+  getImage(request.params.id, function (err, image) {
     if (err) {
       throw err;
     } else {
@@ -145,13 +145,13 @@ app.get('/image/:id', function(request, response) {
   });
 });
 
-app.post('/image/:id/upload', function(request, response) {
-  getImage(request.params.id, function(err, image) {
+app.post('/image/:id/upload', function (request, response) {
+  getImage(request.params.id, function (err, image) {
     if (err) {
       throw err;
     } else {
       var form = new multiparty.Form();
-      form.on('part', function(part) {
+      form.on('part', function (part) {
         uploadImage(image, part, response);
       });
       form.parse(request);
@@ -159,6 +159,6 @@ app.post('/image/:id/upload', function(request, response) {
   });
 });
 
-app.listen(process.env.PORT || 8080, function() {
+app.listen(process.env.PORT || 8080, function () {
   console.log("Server started. Open http://localhost:" + (process.env.PORT || 8080) + " with browser.");
 });
